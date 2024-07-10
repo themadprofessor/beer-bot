@@ -5,3 +5,5 @@ set -e -x
 cargo fmt
 
 cargo clippy -- -Dwarnings
+
+cargo readme --no-indent-headinds > README.md
