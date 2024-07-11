@@ -2,12 +2,6 @@
 
 set -e -x
 
-FILES=$(git diff --cached --name-only --diff-filter=ACM)
-
-cargo fmt
+cargo fmt --check
 
 cargo clippy -- -Dwarnings
-
-cargo readme --no-indent-headings > README.md
-
-git add README.md "$FILES"
