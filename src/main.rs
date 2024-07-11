@@ -18,6 +18,12 @@
 //! cargo build --release features syslog
 //! ```
 //!
+//! ### Docker
+//! ```shell
+//! docker compose up
+//! ```
+//! Build beer-bot, create a minimal image with beer-bot and run the image.
+//!
 //! ## Usage
 //!
 //! Nice and straight forward:

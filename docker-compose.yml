@@ -1,0 +1,5 @@
+services:
+  beerbot:
+    build:
+      context: .
+      network: host
