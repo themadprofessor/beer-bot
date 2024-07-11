@@ -52,7 +52,13 @@ impl Config {
         }
 
         let cfg = config_builder
-            .add_source(Environment::with_prefix("BEERBOT").list_separator("¬"))
+            .add_source(
+                Environment::with_prefix("BEERBOT")
+                    .list_separator("¬")
+                    .try_parsing(true)
+                    .with_list_parse_key("messages")
+                    .with_list_parse_key("crons"),
+            )
             .build()
             .await
             .with_context(|| "Failed to load config")?;
