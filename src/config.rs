@@ -1,7 +1,8 @@
+use std::env;
 use std::fmt::{Debug, Formatter};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use config::builder::AsyncState;
 use config::{
@@ -48,6 +49,19 @@ impl Config {
                 });
             } else {
                 debug!(config_path = ?path.display(), "Config not found, skipping");
+            }
+        }
+
+        let tmp = env::args().nth(1);
+        if let Some(cfg_path) = tmp {
+            let path = PathBuf::from(cfg_path);
+            if tokio::fs::try_exists(&path).await.unwrap_or(false) {
+                config_builder = config_builder.add_async_source(AsyncFileSource {
+                    format: FileFormat::Toml,
+                    file: path,
+                })
+            } else {
+                bail!("{} does not exist", path.display());
             }
         }
 

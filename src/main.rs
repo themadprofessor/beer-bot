@@ -19,6 +19,9 @@
 //! ```
 //!
 //! ### Docker
+//! First create a config file called `config.toml`.
+//! See [Options](#options).
+//!
 //! ```shell
 //! docker compose up
 //! ```
