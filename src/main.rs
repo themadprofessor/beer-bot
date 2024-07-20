@@ -72,16 +72,22 @@
 //! messages = ["It's that time again"]
 //! ```
 
+use std::sync::Arc;
+use std::time::Duration;
+
 use anyhow::{Context, Result};
+use async_scoped::spawner::use_tokio::Tokio;
+use async_scoped::{Scope, TokioScope};
+use chrono::Local;
+use chrono_humanize::HumanTime;
+use cron::Schedule;
 use rand::prelude::IteratorRandom;
 use slack_morphism::prelude::*;
-use tracing::{info, instrument};
+use tracing::{info, instrument, warn};
 
-use crate::schedule::Job;
+use crate::config::Config;
 
 mod config;
-mod globals;
-mod schedule;
 
 #[cfg(feature = "syslog")]
 fn init_log() {
@@ -109,10 +115,76 @@ fn init_log() {
 async fn main() -> Result<()> {
     init_log();
 
-    for schedule in &globals::config().await.crons {
-        Job::new(schedule).start(move || async {
-            let session = globals::open_session().await;
-            let config = globals::config().await;
+    let cfg = Arc::new(
+        Config::new()
+            .await
+            .with_context(|| "Unable to load config")?,
+    );
+
+    let client = Arc::new(SlackClient::new(
+        SlackClientHyperHttpsConnector::new().expect("Failed to initialise HTTPs client"),
+    ));
+
+    let callbacks = SlackSocketModeListenerCallbacks::new().with_command_events(handle_commands);
+    let listener_env = Arc::new(
+        SlackClientEventsListenerEnvironment::new(client.clone()).with_user_state(cfg.clone()),
+    );
+    let listener = SlackClientSocketModeListener::new(
+        &SlackClientSocketModeConfig::new(),
+        listener_env.clone(),
+        callbacks,
+    );
+
+    let _tasks = cfg
+        .crons
+        .iter()
+        .map(|schedule| unsafe {
+            TokioScope::scope(|s: &mut Scope<'_, (), Tokio>| {
+                s.spawn_cancellable(
+                    async { spawn_schedule(schedule, &client, &cfg).await },
+                    || (),
+                )
+            })
+        })
+        .chain([unsafe {
+            TokioScope::scope(|s: &mut Scope<'_, (), Tokio>| {
+                s.spawn_cancellable(
+                    async {
+                        listener
+                            .listen_for(&cfg.socket_token)
+                            .await
+                            .expect("Failed to initialise socket");
+                        listener.start().await
+                    },
+                    || (),
+                )
+            })
+        }])
+        .collect::<Vec<_>>();
+
+    info!("Beer Bot is ready");
+
+    tokio::signal::ctrl_c()
+        .await
+        .with_context(|| "Failed to wait for ctrl+c")?;
+
+    info!("Beet bot is stopping");
+
+    Ok(())
+}
+
+#[instrument(skip_all)]
+async fn spawn_schedule(schedule: &Schedule, client: &SlackHyperClient, config: &Config) {
+    loop {
+        if let Some(next) = schedule.upcoming(Local).next() {
+            let delta = next - Local::now();
+            tokio::time::sleep(Duration::new(
+                delta.num_seconds() as u64,
+                delta.num_nanoseconds().unwrap_or(0) as u32,
+            ))
+            .await;
+
+            let session = client.open_session(&config.token);
             let msg = {
                 config
                     .messages
@@ -123,20 +195,44 @@ async fn main() -> Result<()> {
             session
                 .chat_post_message(&SlackApiChatPostMessageRequest::new(
                     config.channel_id.clone(),
-                    SlackMessageContent::new().with_text(format!("@here {}", msg.clone())),
+                    SlackMessageContent::new().with_text(format!("@everyone {}", msg.clone())),
                 ))
                 .await
                 .expect("Failed to send message");
 
-            info!(msg, "Sent message");
-        });
+            info!(msg, schedule = %schedule, "sent");
+        } else {
+            warn!("unable to find next for cron {}", schedule);
+            break;
+        }
     }
+}
 
-    info!("Beer Bot is ready");
-
-    tokio::signal::ctrl_c()
-        .await
-        .with_context(|| "Failed to wait for ctrl+c")?;
-
-    Ok(())
+#[instrument(skip_all)]
+async fn handle_commands(
+    event: SlackCommandEvent,
+    _client: Arc<SlackHyperClient>,
+    states: SlackClientEventsUserState,
+) -> UserCallbackResult<SlackCommandEventResponse> {
+    Ok(SlackCommandEventResponse::new(
+        match event.command.0.as_str() {
+            "/when-can-i-drink" => {
+                let now = Local::now();
+                let next = states
+                    .read()
+                    .await
+                    .get_user_state::<Arc<Config>>()
+                    .expect("Unable to get config")
+                    .crons
+                    .iter()
+                    .filter_map(|s| s.upcoming(Local).next())
+                    .map(|dt| dt - now)
+                    .min()
+                    .map(|d| HumanTime::from(d).to_string())
+                    .unwrap_or_else(|| "in some time".to_string());
+                SlackMessageContent::new().with_text(next)
+            }
+            _ => SlackMessageContent::new().with_text("Dunno that one".to_string()),
+        },
+    ))
 }

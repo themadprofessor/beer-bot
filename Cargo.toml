@@ -10,10 +10,12 @@ syslog = ["syslog-tracing"]
 [dependencies]
 anyhow = "1.0.86"
 async-trait = "0.1.80"
+async-scoped = { version = "0.9.0", features = ["use-tokio"] }
 chrono = { version = "0.4.38", features = ["serde"] }
 config = "0.14.0"
 cron = "0.12.1"
 directories = "5.0.1"
+chrono-humanize = "0.2.3"
 rand = "0.8.5"
 serde = { version = "1.0.204" }
 serde_with = "3.8.3"

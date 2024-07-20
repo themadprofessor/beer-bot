@@ -21,6 +21,8 @@ use tracing::{debug, instrument};
 pub struct Config {
     #[serde(deserialize_with = "deserialize_token")]
     pub token: SlackApiToken,
+    #[serde(deserialize_with = "deserialize_token")]
+    pub socket_token: SlackApiToken,
     #[serde_as(as = "Vec<DisplayFromStr>")]
     pub crons: Vec<Schedule>,
     pub channel_id: SlackChannelId,
