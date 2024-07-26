@@ -11,12 +11,33 @@
 //! ```
 //! Resulting in the binary `./target/release/beer-bot`.
 //!
-//! ### Logging
 //!
-//! By default, beer-bot uses `stdout` for its logging, but this can be changed to `syslog` by enabling the build feature `syslog`:
+//! ### Features
+//!
+//! | Feature  | Quick Explanation                       | Enabled by Default |
+//! |----------|-----------------------------------------|--------------------|
+//! | syslog   | Output to syslog                        | ☐                  |
+//! | commands | Enable slash commands using Socket Mode | ☑                  |
+//!
+//! Features are additive.
+//! So to have Beer Bot output to Syslog and not enable slash commands, all default features must first be disabled:
+//!
 //! ```shell
-//! cargo build --release features syslog
+//! cargo build --release --no-default-features --features "syslog"
 //! ```
+//!
+//! #### Syslog Feature
+//!
+//! By default, Beer Bot output to stdout, but this can be changed to utilise syslog.
+//! The logging levels are mapped to syslog severities according to the following table:
+//!
+//! | Log Level | Syslog Severity |
+//! |-----------|-----------------|
+//! | ERROR     | Error           |
+//! | WARN      | Warning         |
+//! | INFO      | Notice          |
+//! | DEBUG     | Info            |
+//! | TRACE     | Debug           |
 //!
 //! ### Docker
 //! First create a config file called `config.toml`.
@@ -26,6 +47,7 @@
 //! docker compose up
 //! ```
 //! Build beer-bot, create a minimal image with beer-bot and run the image.
+//! This file is included in the `docker-compose.yml` as a secret.
 //!
 //! ## Usage
 //!
@@ -38,12 +60,13 @@
 //! All the options need to be specified.
 //!
 //! ### Options
-//! | Key        | Meaning                                                              |
-//! | ---------- | -------------------------------------------------------------------- |
-//! | token      | Slack bot oAuth token - Requires `chat:write` scope                  |
-//! | crons      | List of cron expressions with a seconds column prepended.            |
-//! | channel_id | Either the channel name without the `#` or the ID in channel details |
-//! | messages   | List of messages to randomly pick from for announcements             |
+//! | Key          | Meaning                                                              |
+//! | ------------ | -------------------------------------------------------------------- |
+//! | token        | Slack bot oAuth token - Requires `chat:write` scope                  |
+//! | secret_token | Slack SocketMode token - Only required if `commands` feature enabled |
+//! | crons        | List of cron expressions with a seconds column prepended.            |
+//! | channel_id   | Either the channel name without the `#` or the ID in channel details |
+//! | messages     | List of messages to randomly pick from for announcements             |
 //!
 //! ### Environment Variables
 //!
@@ -87,6 +110,7 @@ use tracing::{info, instrument, warn};
 
 use crate::config::Config;
 
+mod commands;
 mod config;
 
 #[cfg(feature = "syslog")]
@@ -96,7 +120,7 @@ fn init_log() {
     tracing_subscriber::fmt()
         .with_writer(
             Syslog::new(
-                CStr::from_bytes_with_nul(b"beerbot").unwrap(),
+                CStr::from_bytes_with_nul(b"beerbot\0").unwrap(),
                 Default::default(),
                 Default::default(),
             )
@@ -125,17 +149,7 @@ async fn main() -> Result<()> {
         SlackClientHyperHttpsConnector::new().expect("Failed to initialise HTTPs client"),
     ));
 
-    let callbacks = SlackSocketModeListenerCallbacks::new().with_command_events(handle_commands);
-    let listener_env = Arc::new(
-        SlackClientEventsListenerEnvironment::new(client.clone()).with_user_state(cfg.clone()),
-    );
-    let listener = SlackClientSocketModeListener::new(
-        &SlackClientSocketModeConfig::new(),
-        listener_env.clone(),
-        callbacks,
-    );
-
-    let _tasks = cfg
+    let _tasks_iter = cfg
         .crons
         .iter()
         .map(|schedule| unsafe {
@@ -146,20 +160,7 @@ async fn main() -> Result<()> {
                 )
             })
         })
-        .chain([unsafe {
-            TokioScope::scope(|s: &mut Scope<'_, (), Tokio>| {
-                s.spawn_cancellable(
-                    async {
-                        listener
-                            .listen_for(&cfg.socket_token)
-                            .await
-                            .expect("Failed to initialise socket");
-                        listener.start().await
-                    },
-                    || (),
-                )
-            })
-        }])
+        .chain(commands::init(cfg.clone(), client.clone()))
         .collect::<Vec<_>>();
 
     info!("Beer Bot is ready");
