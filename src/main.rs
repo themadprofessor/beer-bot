@@ -120,7 +120,6 @@ use anyhow::{Context, Result};
 use async_scoped::spawner::use_tokio::Tokio;
 use async_scoped::{Scope, TokioScope};
 use chrono::Local;
-use chrono_humanize::HumanTime;
 use cron::Schedule;
 use rand::prelude::IteratorRandom;
 use slack_morphism::prelude::*;
@@ -225,33 +224,4 @@ async fn spawn_schedule(schedule: &Schedule, client: &SlackHyperClient, config: 
             break;
         }
     }
-}
-
-#[instrument(skip_all)]
-async fn handle_commands(
-    event: SlackCommandEvent,
-    _client: Arc<SlackHyperClient>,
-    states: SlackClientEventsUserState,
-) -> UserCallbackResult<SlackCommandEventResponse> {
-    Ok(SlackCommandEventResponse::new(
-        match event.command.0.as_str() {
-            "/when-can-i-drink" => {
-                let now = Local::now();
-                let next = states
-                    .read()
-                    .await
-                    .get_user_state::<Arc<Config>>()
-                    .expect("Unable to get config")
-                    .crons
-                    .iter()
-                    .filter_map(|s| s.upcoming(Local).next())
-                    .map(|dt| dt - now)
-                    .min()
-                    .map(|d| HumanTime::from(d).to_string())
-                    .unwrap_or_else(|| "in some time".to_string());
-                SlackMessageContent::new().with_text(next)
-            }
-            _ => SlackMessageContent::new().with_text("Dunno that one".to_string()),
-        },
-    ))
 }
