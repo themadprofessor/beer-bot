@@ -85,6 +85,30 @@
 //! | crons        | List of cron expressions with a seconds column prepended.            |
 //! | channel_id   | Either the channel name without the `#` or the ID in channel details |
 //! | messages     | List of messages to randomly pick from for announcements             |
+//! | log          | Log level directives                                                 |
+//!
+//! The `log` option's structure is defined [here](https://docs.rs/env_logger/0.11.5/env_logger/#enabling-logging).
+//!
+//! #### Logging
+//!
+//! All logging has one of the following levels:
+//! * off
+//! * error
+//! * warn
+//! * info
+//! * debug
+//! * trace
+//!
+//! By default, all logging is disabled since the default max log level to `off`.
+//! By setting the level lower, any logging at the given log level or above in the above list are
+//! outputted.
+//!
+//! Some examples of valid log options:
+//! * `info` enables all info logging and above logging for the whole bot.
+//! * `debug` enables all debug logging and above for the whole bot.
+//!    This does include libraries used by beer-bot, so can get quite spammy.
+//! * `warn,beer_bot=debug` enables warn logging for the whole bot, except for logging specifically
+//!    from the bot which has debug and above logging.
 //!
 //! ### Environment Variables
 //!
@@ -111,11 +135,13 @@
 //! crons = ["0 0 17 * * mon-fri *"]
 //! channel_id = "beer-bot"
 //! messages = ["It's that time again", "LETS GO"]
+//! log = "info"
 //! ```
 
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::config::Config;
 use anyhow::{Context, Result};
 use async_scoped::spawner::use_tokio::Tokio;
 use async_scoped::{Scope, TokioScope};
@@ -124,14 +150,13 @@ use cron::Schedule;
 use rand::prelude::IteratorRandom;
 use slack_morphism::prelude::*;
 use tracing::{info, instrument, warn};
-
-use crate::config::Config;
+use tracing_subscriber::EnvFilter;
 
 mod commands;
 mod config;
 
 #[cfg(feature = "syslog")]
-fn init_log() {
+fn init_log(cfg: &Config) {
     use std::ffi::CStr;
     use syslog_tracing::Syslog;
     tracing_subscriber::fmt()
@@ -143,24 +168,27 @@ fn init_log() {
             )
             .unwrap(),
         )
+        .with_env_filter(EnvFilter::new(&cfg.log))
         .init();
 }
 
 #[cfg(not(feature = "syslog"))]
-fn init_log() {
-    tracing_subscriber::fmt::init();
+fn init_log(cfg: &Config) {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::new(&cfg.log))
+        .init();
 }
 
 #[tokio::main]
 #[instrument]
 async fn main() -> Result<()> {
-    init_log();
-
     let cfg = Arc::new(
         Config::new()
             .await
             .with_context(|| "Unable to load config")?,
     );
+
+    init_log(&cfg);
 
     let client = Arc::new(SlackClient::new(
         SlackClientHyperHttpsConnector::new().expect("Failed to initialise HTTPs client"),

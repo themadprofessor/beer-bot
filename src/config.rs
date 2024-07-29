@@ -14,7 +14,7 @@ use serde::{Deserialize, Deserializer};
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use slack_morphism::{SlackApiToken, SlackApiTokenValue, SlackChannelId};
-use tracing::{debug, instrument};
+use tracing::instrument;
 
 #[serde_as]
 #[derive(Debug, Deserialize)]
@@ -28,6 +28,8 @@ pub struct Config {
     pub crons: Vec<Schedule>,
     pub channel_id: SlackChannelId,
     pub messages: Vec<String>,
+    #[serde(default)]
+    pub log: String,
 }
 
 #[derive(Debug)]
@@ -51,7 +53,7 @@ impl Config {
                     file: path,
                 });
             } else {
-                debug!(config_path = ?path.display(), "Config not found, skipping");
+                eprintln!("Config not found, skipping. {}", path.display());
             }
         }
 
