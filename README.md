@@ -41,6 +41,24 @@ The logging levels are mapped to syslog severities according to the following ta
 | DEBUG     | Info            |
 | TRACE     | Debug           |
 
+#### Commands Feature
+
+With this feature disabled, beer-bot spends almost all of its time sleeping.
+Only waking when any of the crons trigger.
+Therefore, if slash commands are not needed, it's recommended to disable them.
+
+Rather than require beer-bot to act as a HTTP server and what that entails to receive slash
+commands, it utilises [Socket Mode](https://api.slack.com/apis/socket-mode).
+Enabling Socket Mode in Slack's App Config will generate an "App Level Token" which beer-bot
+use to establish the web socket between it and Slack.
+This token *must* be passed to beer-bot using the `socket_token` [option](#options).
+
+Once Socket Mode is enabled, a [Slash Command](https://api.slack.com/interactivity/slash-commands)
+can be created without having to specify an endpoint.
+
+Beer-bot listens for the following commands:
+* `when-can-i-drink`
+
 ### Docker
 First create a config file called `config.toml`.
 See [Options](#options).
@@ -65,7 +83,7 @@ All the options need to be specified.
 | Key          | Meaning                                                              |
 | ------------ | -------------------------------------------------------------------- |
 | token        | Slack bot oAuth token - Requires `chat:write` scope                  |
-| secret_token | Slack SocketMode token - Only required if `commands` feature enabled |
+| socket_token | Slack SocketMode token - Only required if `commands` feature enabled |
 | crons        | List of cron expressions with a seconds column prepended.            |
 | channel_id   | Either the channel name without the `#` or the ID in channel details |
 | messages     | List of messages to randomly pick from for announcements             |
@@ -94,7 +112,7 @@ BEERBOT_MESSAGES="Lets Go¬Its time to party"
 token = "xo..."
 crons = ["0 0 17 * * mon-fri *"]
 channel_id = "beer-bot"
-messages = ["It's that time again"]
+messages = ["It's that time again", "LETS GO"]
 ```
 
 License: MIT
