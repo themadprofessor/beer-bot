@@ -1,5 +1,5 @@
 use std::env;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
@@ -84,6 +84,23 @@ impl Config {
 
         cfg.try_deserialize()
             .with_context(|| "Failed to convert config")
+    }
+}
+
+impl Display for Config {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "{{ token: (len:{}), socket_token: (len:{}), crons: [{}], messages: [{}], log: \"{}\" }}",
+            self.token.token_value.0.len(),
+            self.socket_token.token_value.0.len(),
+            self.crons
+                .iter()
+                .map(|c| c.to_string())
+                .collect::<Vec<String>>()
+                .join(", "),
+            self.messages.join(", "),
+            self.log
+        ))
     }
 }
 

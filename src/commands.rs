@@ -12,7 +12,7 @@ use slack_morphism::{
     SlackMessageResponseType, SlackSocketModeListenerCallbacks, UserCallbackResult,
 };
 use std::sync::Arc;
-use tracing::{instrument, warn};
+use tracing::{debug, info, instrument, trace, warn};
 
 #[cfg(feature = "commands")]
 pub fn init<'a>(
@@ -39,6 +39,7 @@ pub fn init<'a>(
                         .listen_for(&cfg.socket_token)
                         .await
                         .expect("Failed to initialise socket");
+                    info!("listening for commands");
                     listener.serve().await;
                 },
                 || (),
@@ -64,12 +65,13 @@ fn handle_errors(
     HttpStatusCode::OK
 }
 
-#[instrument(skip_all)]
+#[instrument(skip_all, fields(cmd = event.command.0))]
 async fn handle_commands(
     event: SlackCommandEvent,
     _client: Arc<SlackHyperClient>,
     states: SlackClientEventsUserState,
 ) -> UserCallbackResult<SlackCommandEventResponse> {
+    debug!("command received");
     Ok(match event.command.0.as_str() {
         "/when-can-i-drink" => {
             let now = Local::now();
@@ -85,6 +87,7 @@ async fn handle_commands(
                 .min()
                 .map(|d| HumanTime::from(d).to_string())
                 .unwrap_or_else(|| "in some time".to_string());
+            trace!(next = next);
             SlackCommandEventResponse::new(SlackMessageContent::new().with_text(next))
                 .with_response_type(SlackMessageResponseType::InChannel)
         }
