@@ -5,6 +5,8 @@ services:
       network: host
     secrets:
       - config.toml
+    volumes:
+      - "/etc/localtime:/etc/localtime:ro"
 
 secrets:
   config.toml:
