@@ -9,6 +9,9 @@ choice>.
 
 ## Build
 
+### Default build
+This is linked to your standard glibc stuff.
+
 Nice and straight forward:
 
 ```shell
@@ -17,12 +20,51 @@ cargo build --release
 
 Resulting in the binary `./target/release/beer-bot`.
 
+### Using Musl for better compatability
+You can instead use Musl libraries so that you're not tied to running the binary on the system it was compiled on.
+
+#### Install the musl package
+ * On Debian based systems:
+
+```shell
+sudo apt install musl-tools
+```
+
+ * On Arch based systems:
+
+```shell
+sudo pacman -S musl
+```
+#### Find the target arch
+ * Pick an arch from the output:
+
+```shell
+rustup target list
+```
+#### Install the target arch
+ * Repeat with each arch required:
+```shell
+rustup target add x86_64-unknown-linux-musl
+```
+
+### Build the target arch
+ * Repeat with each arch required:
+```shell
+cargo build --target=x86_64-unknown-linux-musl --release
+```
+
+You will find the compiled target at:
+
+```shell
+./target/$arch/release/beer-bot
+```
+
 ### Features
 
 | Feature  | Quick Explanation                       | Enabled by Default |
 |----------|-----------------------------------------|--------------------|
-| syslog   | Output to syslog                        | ☐                  |
 | commands | Enable slash commands using Socket Mode | ☑                  |
+| syslog   | Output to syslog                        | ☐                  |
 
 Features are additive.
 So to have Beer Bot output to Syslog and not enable slash commands, all default features must first be disabled:
@@ -59,7 +101,7 @@ This token *must* be passed to beer-bot using the `socket_token` [option](#optio
 Once Socket Mode is enabled, a [Slash Command](https://api.slack.com/interactivity/slash-commands)
 can be created without having to specify an endpoint.
 
-Beer-bot listens for the following commands:
+By default, Beer-bot listens for the following command(s):
 
 * `when-can-i-drink`
 
@@ -104,12 +146,12 @@ The `log` option's structure is defined [here](https://docs.rs/env_logger/0.11.5
 
 All logging has one of the following levels:
 
-* off
-* error
-* warn
-* info
-* debug
-* trace
+  * off
+  * error
+  * warn
+  * info
+  * debug
+  * trace
 
 By default, all logging is disabled since the default max log level to `off`.
 By setting the level lower, any logging at the given log level or above in the above list are
@@ -117,11 +159,11 @@ outputted.
 
 Some examples of valid log options:
 
-* `info` enables all info logging and above logging for the whole bot.
-* `debug` enables all debug logging and above for the whole bot.
-  This does include libraries used by beer-bot, so can get quite spammy.
-* `warn,beer_bot=debug` enables warn logging for the whole bot, except for logging specifically
-  from the bot which has debug and above logging.
+* `info`: enables all info logging and above logging for the whole bot.
+* `debug`: enables all debug logging and above for the whole bot.
+This does include libraries used by beer-bot, so can get quite spammy.
+* `warn,beer_bot=debug`: enables warn logging for the whole bot, except for logging specifically
+from the bot which has debug and above logging.
 
 ### Environment Variables
 
@@ -132,8 +174,11 @@ Lists like `messages` are seperated by `¬`. (Needed a symbol that isn't likely 
 
 ```shell
 BEERBOT_TOKEN="xo..."
+BEERBOT_SOCKET_TOKEN="xapp..."
+BEERBOT_CRONS="0 0 17 * * mon-thu *¬0 0 12 * * fri *"
 BEERBOT_CHANNEL_ID="beer-bot"
 BEERBOT_MESSAGES="Lets Go¬Its time to party"
+BEERBOT_LOG="info"
 ```
 
 ### Config File
@@ -148,7 +193,8 @@ BEERBOT_MESSAGES="Lets Go¬Its time to party"
 
 ```toml
 token = "xo..."
-crons = ["0 0 17 * * mon-fri *"]
+socket_token = "xapp..."
+crons = ["0 0 17 * * mon-fri *","0 0 12 * * fri *"]
 channel_id = "beer-bot"
 messages = ["It's that time again", "LETS GO"]
 log = "info"
