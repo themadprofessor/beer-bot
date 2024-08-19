@@ -107,7 +107,7 @@ async fn spawn_schedule(schedule: &Schedule, client: &SlackHyperClient, config: 
             session
                 .chat_post_message(&SlackApiChatPostMessageRequest::new(
                     config.channel_id.clone(),
-                    SlackMessageContent::new().with_text(format!("@everyone {}", msg.clone())),
+                    SlackMessageContent::new().with_text(msg.clone()),
                 ))
                 .await
                 .expect("Failed to send message");
