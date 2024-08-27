@@ -9,6 +9,7 @@ use config::{
     AsyncSource, ConfigBuilder, ConfigError, Environment, FileFormat, Format, Map, Value,
 };
 use cron::Schedule;
+use derive_more::Debug as DeriveDebug;
 use serde::de::{Error, Visitor};
 use serde::{Deserialize, Deserializer};
 use serde_with::serde_as;
@@ -17,17 +18,31 @@ use slack_morphism::{SlackApiToken, SlackApiTokenValue, SlackChannelId};
 use tracing::instrument;
 
 #[serde_as]
-#[derive(Debug, Deserialize)]
+#[derive(DeriveDebug, Deserialize)]
 pub struct Config {
     #[serde(deserialize_with = "deserialize_token")]
+    #[debug("len({})", token.token_value.0.len())]
     pub token: SlackApiToken,
+
     #[cfg(feature = "commands")]
     #[serde(deserialize_with = "deserialize_token")]
+    #[debug("len({})", socket_token.token_value.0.len())]
     pub socket_token: SlackApiToken,
+
+    #[cfg(feature = "giphy")]
+    #[debug("len({})", giphy_token.len())]
+    pub giphy_token: String,
+
     #[serde_as(as = "Vec<DisplayFromStr>")]
     pub crons: Vec<Schedule>,
+
     pub channel_id: SlackChannelId,
+
     pub messages: Vec<String>,
+
+    #[cfg(feature = "giphy")]
+    pub gif_searches: Vec<String>,
+
     #[serde(default)]
     pub log: String,
 }
@@ -90,9 +105,8 @@ impl Config {
 impl Display for Config {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!(
-            "{{ token: (len:{}), socket_token: (len:{}), crons: [{}], messages: [{}], log: \"{}\" }}",
+            "{{ token: (len:{}), crons: [{}], messages: [{}], log: \"{}\" ",
             self.token.token_value.0.len(),
-            self.socket_token.token_value.0.len(),
             self.crons
                 .iter()
                 .map(|c| c.to_string())
@@ -100,7 +114,27 @@ impl Display for Config {
                 .join(", "),
             self.messages.join(", "),
             self.log
-        ))
+        ))?;
+
+        #[cfg(feature = "commands")]
+        {
+            f.write_fmt(format_args!(
+                "socket_token: (len: {}) ",
+                self.socket_token.token_value.0.len(),
+            ))?;
+        }
+
+        #[cfg(feature = "giphy")]
+        {
+            f.write_fmt(format_args!(
+                "gif_searches: [{}] ",
+                self.gif_searches.join(", ")
+            ))?;
+        }
+
+        f.write_str("}")?;
+
+        Ok(())
     }
 }
 

@@ -10,6 +10,7 @@ choice>.
 ## Build
 
 ### Default build
+
 This is linked to your standard glibc stuff.
 
 Nice and straight forward:
@@ -21,34 +22,43 @@ cargo build --release
 Resulting in the binary `./target/release/beer-bot`.
 
 ### Using Musl for better compatability
+
 You can instead use Musl libraries so that you're not tied to running the binary on the system it was compiled on.
 
 #### Install the musl package
- * On Debian based systems:
+
+* On Debian based systems:
 
 ```shell
 sudo apt install musl-tools
 ```
 
- * On Arch based systems:
+* On Arch based systems:
 
 ```shell
 sudo pacman -S musl
 ```
+
 #### Find the target arch
- * Pick an arch from the output:
+
+* Pick an arch from the output:
 
 ```shell
 rustup target list
 ```
+
 #### Install the target arch
- * Repeat with each arch required:
+
+* Repeat with each arch required:
+
 ```shell
 rustup target add x86_64-unknown-linux-musl
 ```
 
 ### Build the target arch
- * Repeat with each arch required:
+
+* Repeat with each arch required:
+
 ```shell
 cargo build --target=x86_64-unknown-linux-musl --release
 ```
@@ -64,6 +74,7 @@ You will find the compiled target at:
 | Feature  | Quick Explanation                       | Enabled by Default |
 |----------|-----------------------------------------|--------------------|
 | commands | Enable slash commands using Socket Mode | ☑                  |
+| giphy    | Enable gifs as part of annoucements     | ☑                  |
 | syslog   | Output to syslog                        | ☐                  |
 
 Features are additive.
@@ -105,6 +116,23 @@ By default, Beer-bot listens for the following command(s):
 
 * `when-can-i-drink`
 
+#### Giphy Feature
+
+With this feature enabled, random gifs based on the configured searches are included with the random messages in
+announcements.
+For this to work, an API token from Giphy *must* be passed to beer-bot using the `giphy_token` [option](#options).
+See [Giphy's Docs](https://developers.giphy.com/docs/api/#quick-start-guide) for how to generate an API key.
+<br/>
+<sub>So far only a "beta" key has been tested, and it _seems_ to be working.</sub>
+
+Beer-bot will create a "block" with a randomly selected message as the header and the random GIF as the body of the
+"block".
+Due to licencing with Giphy, the text "Powered By Giphy" are placed between the header and the GIF.
+
+Here's an example:
+<br/>
+![Example announcement with a GIF](example.jpg)
+
 ### Docker
 
 First create a config file called `config.toml`.
@@ -135,9 +163,11 @@ All the options need to be specified.
 |--------------|----------------------------------------------------------------------|
 | token        | Slack bot oAuth token - Requires `chat:write` scope                  |
 | socket_token | Slack SocketMode token - Only required if `commands` feature enabled |
+| giphy_token  | Giphy API token - Only required if `giphy` feature enabled           |
 | crons        | List of cron expressions with a seconds column prepended.            |
 | channel_id   | Either the channel name without the `#` or the ID in channel details |
 | messages     | List of messages to randomly pick from for announcements             |
+| gif_searches | List of giphy searches to randomly pick from for announcements       |
 | log          | Log level directives                                                 |
 
 The `log` option's structure is defined [here](https://docs.rs/env_logger/0.11.5/env_logger/#enabling-logging).
@@ -146,12 +176,12 @@ The `log` option's structure is defined [here](https://docs.rs/env_logger/0.11.5
 
 All logging has one of the following levels:
 
-  * off
-  * error
-  * warn
-  * info
-  * debug
-  * trace
+* off
+* error
+* warn
+* info
+* debug
+* trace
 
 By default, all logging is disabled since the default max log level to `off`.
 By setting the level lower, any logging at the given log level or above in the above list are
@@ -161,9 +191,9 @@ Some examples of valid log options:
 
 * `info`: enables all info logging and above logging for the whole bot.
 * `debug`: enables all debug logging and above for the whole bot.
-This does include libraries used by beer-bot, so can get quite spammy.
+  This does include libraries used by beer-bot, so can get quite spammy.
 * `warn,beer_bot=debug`: enables warn logging for the whole bot, except for logging specifically
-from the bot which has debug and above logging.
+  from the bot which has debug and above logging.
 
 ### Environment Variables
 
@@ -175,9 +205,11 @@ Lists like `messages` are seperated by `¬`. (Needed a symbol that isn't likely 
 ```shell
 BEERBOT_TOKEN="xo..."
 BEERBOT_SOCKET_TOKEN="xapp..."
+BEERBOT_GIPHY_TOKEN="foobarbaz"
 BEERBOT_CRONS="0 0 17 * * mon-thu *¬0 0 12 * * fri *"
 BEERBOT_CHANNEL_ID="beer-bot"
 BEERBOT_MESSAGES="Lets Go¬Its time to party"
+BEERBOT_GIF_SEARCHES="beer¬wine¬gin"
 BEERBOT_LOG="info"
 ```
 
@@ -194,9 +226,11 @@ BEERBOT_LOG="info"
 ```toml
 token = "xo..."
 socket_token = "xapp..."
-crons = ["0 0 17 * * mon-fri *","0 0 12 * * fri *"]
+giphy_token = "foobarbaz"
+crons = ["0 0 17 * * mon-fri *", "0 0 12 * * fri *"]
 channel_id = "beer-bot"
 messages = ["It's that time again", "LETS GO"]
+gif_searches = ["beer", "wine", "gin"]
 log = "info"
 ```
 

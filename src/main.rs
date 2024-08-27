@@ -1,20 +1,23 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use async_scoped::spawner::use_tokio::Tokio;
 use async_scoped::{Scope, TokioScope};
 use chrono::Local;
 use cron::Schedule;
-use rand::prelude::IteratorRandom;
 use slack_morphism::prelude::*;
 use tracing::{debug, info, instrument, trace, warn};
 use tracing_subscriber::EnvFilter;
 
 use crate::config::Config;
+use crate::message::MessageBuilder;
 
 mod commands;
 mod config;
+#[cfg(feature = "giphy")]
+mod giphy;
+mod message;
 
 #[cfg(feature = "syslog")]
 fn init_log(cfg: &Config) {
@@ -53,6 +56,9 @@ async fn main() -> Result<()> {
 
     debug!(config = %cfg);
 
+    /*    let giphy = giphy_api::Client::new(&cfg.giphy_token).gifs();
+     */
+
     let client = Arc::new(SlackClient::new(
         SlackClientHyperHttpsConnector::new().expect("Failed to initialise HTTPs client"),
     ));
@@ -63,7 +69,13 @@ async fn main() -> Result<()> {
         .map(|schedule| unsafe {
             TokioScope::scope(|s: &mut Scope<'_, (), Tokio>| {
                 s.spawn_cancellable(
-                    async { spawn_schedule(schedule, &client, &cfg).await },
+                    async {
+                        if let Err(e) =
+                            spawn_schedule(schedule, &client, &cfg, MessageBuilder::new(&cfg)).await
+                        {
+                            warn!(?e)
+                        }
+                    },
                     || (),
                 )
             })
@@ -83,7 +95,12 @@ async fn main() -> Result<()> {
 }
 
 #[instrument(skip_all, fields(cron = %schedule))]
-async fn spawn_schedule(schedule: &Schedule, client: &SlackHyperClient, config: &Config) {
+async fn spawn_schedule(
+    schedule: &Schedule,
+    client: &SlackHyperClient,
+    config: &Config,
+    builder: MessageBuilder<'_>,
+) -> Result<()> {
     loop {
         if let Some(next) = schedule.upcoming(Local).next() {
             let delta = next - Local::now();
@@ -96,26 +113,15 @@ async fn spawn_schedule(schedule: &Schedule, client: &SlackHyperClient, config: 
             trace!("awoken");
 
             let session = client.open_session(&config.token);
-            let msg = {
-                config
-                    .messages
-                    .iter()
-                    .choose(&mut rand::thread_rng())
-                    .unwrap()
-            };
-            debug!(msg, "sending");
             session
                 .chat_post_message(&SlackApiChatPostMessageRequest::new(
                     config.channel_id.clone(),
-                    SlackMessageContent::new().with_text(msg.clone()),
+                    builder.build_message().await?,
                 ))
                 .await
                 .expect("Failed to send message");
-
-            info!(msg);
         } else {
-            warn!("unable to find next for cron. Disabling this cron.");
-            break;
+            bail!("unable to find next for cron. Disabling this cron.");
         }
     }
 }
