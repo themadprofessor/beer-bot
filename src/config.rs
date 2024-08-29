@@ -91,7 +91,8 @@ impl Config {
                     .list_separator("¬")
                     .try_parsing(true)
                     .with_list_parse_key("messages")
-                    .with_list_parse_key("crons"),
+                    .with_list_parse_key("crons")
+                    .with_list_parse_key("gif_searches"),
             )
             .build()
             .await
