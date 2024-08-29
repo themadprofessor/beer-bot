@@ -56,9 +56,9 @@ async fn main() -> Result<()> {
 
     debug!(config = %cfg);
 
-    /*    let giphy = giphy_api::Client::new(&cfg.giphy_token).gifs();
-     */
-
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .expect("Failed to initialise TLS");
     let client = Arc::new(SlackClient::new(
         SlackClientHyperHttpsConnector::new().expect("Failed to initialise HTTPs client"),
     ));
