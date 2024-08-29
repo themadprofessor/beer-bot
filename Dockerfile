@@ -1,8 +1,8 @@
-FROM rust:alpine as builder
+FROM rust:alpine AS builder
 
 WORKDIR /usr/src/beerbot
 
-RUN apk add --no-cache musl-dev
+RUN apk add --no-cache musl-dev pkgconfig
 
 #Cache deps as layer
 COPY Cargo.lock Cargo.toml ./
