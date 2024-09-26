@@ -4,6 +4,7 @@ use crate::giphy::Giphy;
 use anyhow::Result;
 use rand::prelude::IteratorRandom;
 use slack_morphism::SlackMessageContent;
+use std::borrow::Cow;
 use tracing::info;
 
 pub struct MessageBuilder<'a> {
@@ -49,20 +50,23 @@ impl<'a> MessageBuilder<'a> {
             .unwrap();
         let gif = self.gifs.random(search).await?;
 
-        info!(?gif, "sending");
+        info!(?gif, search, "sending");
+
+        let alt = if gif.alt_text.is_empty() {
+            Cow::Borrowed(search)
+        } else {
+            Cow::Owned(gif.alt_text)
+        };
 
         let content = SlackMessageContent::new().with_blocks(vec![
             SlackBlock::Header(SlackHeaderBlock::new(SlackBlockPlainTextOnly::from(
                 self.get_message().clone(),
             ))),
             SlackBlock::Image(
-                SlackImageBlock::new(Url::parse(&gif.url)?, gif.alt_text)
+                SlackImageBlock::new(Url::parse(&gif.url)?, alt.into_owned())
                     .with_title("Powered By GIPHY".into()),
             ),
         ]);
-
-        let json = serde_json::to_string_pretty(&content)?;
-        info!("{}", json);
 
         Ok(content)
     }
